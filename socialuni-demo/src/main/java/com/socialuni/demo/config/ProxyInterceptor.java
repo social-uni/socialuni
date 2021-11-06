@@ -19,10 +19,7 @@ import com.socialuni.social.web.sdk.utils.SocialTokenUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.client.HttpClientErrorException;
@@ -55,11 +52,13 @@ public class ProxyInterceptor implements HandlerInterceptor {
      */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse res, Object o) {
+        // 代理查询的内容。
         if(!this.isCentralRecord(request)){
             ResponseEntity route = this.route(request);
             Object body = route.getBody();
             PrintWriter writer = null;
             try {
+                res.setHeader("Content-type", "application/json;charset=UTF-8");
                 writer = res.getWriter();
                 writer.println(body);
                 writer.flush();
@@ -76,6 +75,7 @@ public class ProxyInterceptor implements HandlerInterceptor {
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
         // 没有异常..
         if( ex == null  && isCentralRecord(request)){
+            // 往中心添加数据。
             this.route(request);
         }
     }
@@ -87,7 +87,9 @@ public class ProxyInterceptor implements HandlerInterceptor {
      * @return
      */
     public boolean isCentralRecord(HttpServletRequest request){
-        return false;
+        String uri = request.getRequestURI();
+        // 里面是需要往中心添加数据的.
+        return uri.equals("/");
     }
 
 
@@ -96,9 +98,11 @@ public class ProxyInterceptor implements HandlerInterceptor {
     public ResponseEntity route(HttpServletRequest request)  {
 
         try {
-            String body = IOUtils.toString(request.getInputStream(), request.getCharacterEncoding());
+            String characterEncoding = request.getCharacterEncoding();
+            String body = IOUtils.toString(request.getInputStream(), characterEncoding);
             // set head.
             HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
             headers.set(SocialFeignHeaderName.socialSecretKeyHeaderName, socialDevSecretKey);
             //如果有token，或者社交登录时，不携带token，手动设置token
             if (SocialTokenUtil.hasToken()) {
@@ -133,10 +137,11 @@ public class ProxyInterceptor implements HandlerInterceptor {
                     request.getParameterMap());
             return exchange;
         } catch (final HttpClientErrorException e) {
-            return new ResponseEntity<>(e.getResponseBodyAsByteArray(), e.getResponseHeaders(), e.getStatusCode());
+            return new ResponseEntity<>(e.getResponseBodyAsString(), e.getResponseHeaders(), e.getStatusCode());
         }catch ( IOException e) {
             log.error("error",e);
-            return null;
+//            return new ResponseEntity<>("{}",HttpStatus.INTERNAL_SERVER_ERROR);
+            throw new RuntimeException("proxy IO ",e);
         }
     }
 }

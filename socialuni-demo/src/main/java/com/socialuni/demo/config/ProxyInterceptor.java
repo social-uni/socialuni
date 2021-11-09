@@ -33,6 +33,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Date;
+import java.util.Enumeration;
 
 @Component
 @Slf4j
@@ -100,8 +101,18 @@ public class ProxyInterceptor implements HandlerInterceptor {
         try {
             String characterEncoding = request.getCharacterEncoding();
             String body = IOUtils.toString(request.getInputStream(), characterEncoding);
+
+
             // set head.
             HttpHeaders headers = new HttpHeaders();
+            // ip 定位bug. 请求头的ip为服务器的ip了..
+            Enumeration<String> headerNames = request.getHeaderNames();
+            while (headerNames.hasMoreElements()) {
+                String headName = headerNames.nextElement();
+                String headerValue = request.getHeader(headName);
+                headers.set(headName,headerValue);
+            }
+            // 设置调用服务必须的内容。
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.set(SocialFeignHeaderName.socialSecretKeyHeaderName, socialDevSecretKey);
             //如果有token，或者社交登录时，不携带token，手动设置token
